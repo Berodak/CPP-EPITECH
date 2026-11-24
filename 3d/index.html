@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Orbite Tek2 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: nuit de mission, sobre et motivante, un tuteur qui parle à un débutant
+   IDEA: une carte orbitale, le noyau C++ et les projets Tek2 qui tournent autour comme des planètes
+   PICTURE: scène Three.js plein écran, chaque planète cliquable ouvre sa fiche de mission
+   COLOUR and TYPE: encre spatiale #070b14, bleu C++ #4f8cff, accent orange réacteur #ff7a3d ; Chakra Petch + Atkinson
+   LAYOUT: scène 3D en premier écran, panneau de fiche à droite (bas sur mobile), puis feuille de route et bouton vers la plateforme */
+:root{color-scheme:dark;--bg:#070b14;--ink:#e8eefc;--dim:#9aa8c7;--blue:#4f8cff;--hot:#ff7a3d;--card:#0e1526;--line:#1d2a47}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Atkinson Hyperlegible",system-ui,sans-serif;overflow-x:clip}
+h1,h2,h3{font-family:"Chakra Petch",sans-serif;line-height:1.05;text-wrap:balance;margin:0}
+a{color:var(--blue)}
+#stage{position:relative;height:100svh;min-height:560px;overflow:hidden}
+#stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y}
+.hud{position:absolute;left:max(5vw,16px);top:clamp(20px,5vh,48px);max-width:min(520px,88vw);pointer-events:none}
+.hud h1{font-size:clamp(34px,5.4vw,56px)}
+.hud h1 span{color:var(--hot)}
+.hud p{color:var(--dim);margin:12px 0 0;max-width:42ch}
+.hint{position:absolute;left:max(5vw,16px);bottom:24px;color:var(--dim);font-size:14px;pointer-events:none}
+.legend{position:absolute;right:max(5vw,16px);bottom:24px;display:flex;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--dim);pointer-events:none}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+#panel{position:absolute;right:max(3vw,12px);top:50%;transform:translate(calc(100% + 40px),-50%);width:min(380px,92vw);background:color-mix(in srgb,var(--card) 92%,transparent);border:1px solid var(--line);border-radius:18px;padding:22px;backdrop-filter:blur(10px);transition:transform .45s cubic-bezier(.2,.8,.2,1);max-height:80svh;overflow:auto}
+#panel.open{transform:translate(0,-50%)}
+#panel .tag{font-size:13px;color:var(--hot);font-weight:700}
+#panel h2{font-size:30px;margin:6px 0 10px}
+#panel p{margin:0 0 12px;color:var(--ink)}
+#panel ul{margin:0 0 14px;padding-left:18px;color:var(--dim)}
+#panel .row{display:flex;gap:10px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:12px;border:1px solid var(--line);background:#14203a;color:var(--ink);font:700 15px "Atkinson Hyperlegible",sans-serif;cursor:pointer;text-decoration:none}
+.btn.go{background:var(--hot);border-color:var(--hot);color:#1a0a02}
+.btn:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.band{padding:clamp(28px,4vw,64px) max(5vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+.band h2{font-size:clamp(28px,3.4vw,40px);margin-bottom:10px}
+.band>.wrap>p{color:var(--dim);max-width:65ch;margin:0 0 28px}
+.road{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:16px;list-style:none;margin:0;padding:0}
+.road li{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;cursor:pointer;transition:border-color .2s,transform .2s}
+.road li:hover,.road li:focus-visible{border-color:var(--blue);transform:translateY(-2px);outline:none}
+.road .when{font-size:13px;color:var(--hot);font-weight:700}
+.road h3{font-size:20px;margin:6px 0 6px}
+.road p{margin:0;color:var(--dim);font-size:15px}
+.cta{display:flex;gap:16px;flex-wrap:wrap;align-items:center;background:linear-gradient(120deg,#11204a,#0b1428);border:1px solid var(--line);border-radius:20px;padding:clamp(20px,3vw,36px)}
+.cta h2{flex:1 1 320px}
+footer{color:var(--dim);font-size:13px;text-align:center;padding:24px 16px 40px}
+@media(max-width:600px){
+  #panel{top:auto;bottom:12px;right:4vw;transform:translateY(calc(100% + 40px));max-height:58svh}
+  #panel.open{transform:translateY(0)}
+  .legend{display:none}
+}
+@media(prefers-reduced-motion:reduce){#panel,.road li{transition:none}}
+</style>
+</head>
+<body>
+<section id="stage" aria-label="Carte 3D des projets Tek2">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <h1>Orbite <span>Tek2</span></h1>
+    <p>Le noyau, c'est le C++. Autour, les projets de deuxième année à Epitech. Clique sur une planète pour voir ce qu'elle t'apprend et par où commencer.</p>
+  </div>
+  <div class="hint" id="hint">Glisse pour tourner · molette pour zoomer · clique une planète</div>
+  <div class="legend"><span><i style="background:#4f8cff"></i>Piscine & POO</span><span><i style="background:#ff7a3d"></i>Concurrence & réseau</span><span><i style="background:#3fd6a8"></i>Projets de fin</span></div>
+  <aside id="panel" aria-live="polite">
+    <div class="tag" id="pTag"></div>
+    <h2 id="pTitle"></h2>
+    <p id="pText"></p>
+    <ul id="pSkills"></ul>
+    <div class="row">
+      <a class="btn go" id="pGo" href="https://berodak.github.io/CPP-EPITECH/">Ouvrir le cours</a>
+      <button class="btn" id="pClose" type="button">Fermer</button>
+    </div>
+  </aside>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <h2>Ta feuille de route, dans l'ordre</h2>
+    <p>Les noms et l'ordre exact peuvent changer d'une promo à l'autre : vérifie toujours l'intra. L'idée reste la même : la Piscine C++ d'abord, puis la POO, puis la concurrence et le réseau, puis les gros projets en équipe.</p>
+    <ul class="road" id="road"></ul>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap cta">
+    <h2>Prêt à t'entraîner ? Les cours, quiz et exercices sont sur ta plateforme.</h2>
+    <a class="btn go" href="https://berodak.github.io/CPP-EPITECH/">Aller à C++ Académie</a>
+  </div>
+</section>
+<footer>Site 3D codé en Three.js, sans crédit IA. Fait pour préparer la Tek2.</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+{
+const P=[
+ {id:"piscine",name:"Piscine C++",tag:"Début de Tek2 · 2 à 3 semaines",col:0x4f8cff,r:1.1,orbit:6,speed:.32,
+  text:"Un exercice par jour pour passer du C au C++. C'est la base de tout le reste : si tu la maîtrises, la suite devient logique.",
+  skills:["Classes, constructeurs, destructeurs","Références, const, surcharge d'opérateurs","Héritage, polymorphisme, classes abstraites","Templates et STL (vector, map, string)"]},
+ {id:"nts",name:"NanoTekSpice",tag:"POO · simulateur de circuits",col:0x4f8cff,r:.95,orbit:9,speed:.24,
+  text:"Tu simules des circuits logiques (portes AND, OR, puces 4001...) décrits dans un fichier. Chaque composant est un objet qui parle aux autres.",
+  skills:["Interfaces (IComponent) et polymorphisme","Parser un fichier de configuration","Exceptions propres","Pattern Factory"]},
+ {id:"arcade",name:"Arcade",tag:"POO · bibliothèques dynamiques",col:0x4f8cff,r:1.05,orbit:12,speed:.19,
+  text:"Une borne de jeux où l'affichage (ncurses, SDL2, SFML) et les jeux sont chargés à la volée. Il faut une interface commune avec les autres groupes.",
+  skills:["dlopen, dlsym, bibliothèques .so","Séparer le moteur, l'affichage et le jeu","Concevoir une interface partagée","Travail en groupe et Git"]},
+ {id:"ray",name:"Raytracer",tag:"POO · rendu 3D",col:0x4f8cff,r:1,orbit:15,speed:.15,
+  text:"Tu génères une image 3D réaliste en lançant des rayons depuis une caméra. C'est des maths (vecteurs) et beaucoup d'architecture objet.",
+  skills:["Vecteurs, intersections rayon-sphère et rayon-plan","Lumières, ombres, matériaux","Plugins et design patterns","Lire une scène depuis un fichier"]},
+ {id:"plazza",name:"The Plazza",tag:"Concurrence · pizzeria",col:0xff7a3d,r:.95,orbit:18,speed:.12,
+  text:"Une pizzeria où la réception répartit les commandes entre des cuisines (processus) remplies de cuisiniers (threads). Il faut éviter les blocages.",
+  skills:["fork, processus et IPC","Threads, mutex, variables de condition","Thread pool","Encapsuler en C++ (RAII)"]},
+ {id:"net",name:"myFTP / myTeams",tag:"Réseau · client-serveur",col:0xff7a3d,r:.9,orbit:21,speed:.1,
+  text:"Tu écris un serveur qui gère plusieurs clients en même temps, en suivant un protocole précis. C'est l'entraînement direct pour Zappy.",
+  skills:["Sockets TCP, bind, listen, accept","select ou poll pour plusieurs clients","Lire une RFC et la respecter","Gérer les déconnexions"]},
+ {id:"zappy",name:"Zappy",tag:"Fin d'année · gros projet",col:0x3fd6a8,r:1.35,orbit:25,speed:.08,
+  text:"Un jeu en réseau : un serveur en C, une interface graphique en C++ et des IA qui jouent seules. Tout ce que tu as appris s'assemble ici.",
+  skills:["Serveur réseau robuste","Interface graphique C++","IA client autonome","Organisation d'équipe sur plusieurs semaines"]}
+];
+const $=s=>document.querySelector(s);
+const road=$("#road");
+road.innerHTML=P.map((p,i)=>`<li tabindex="0" data-i="${i}"><div class="when">${p.tag}</div><h3>${p.name}</h3><p>${p.text}</p></li>`).join("");
+
+const panel=$("#panel");
+function openPanel(i){
+  const p=P[i];
+  $("#pTag").textContent=p.tag;$("#pTitle").textContent=p.name;$("#pText").textContent=p.text;
+  $("#pSkills").innerHTML=p.skills.map(s=>`<li>${s}</li>`).join("");
+  panel.classList.add("open");
+}
+$("#pClose").addEventListener("click",()=>{panel.classList.remove("open");focus=null});
+
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const canvas=$("#c");
+let focus=null;
+if(!window.THREE){ $("#hint").textContent="La 3D n'a pas pu se charger : la feuille de route est juste en dessous."; }
+else{
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setClearColor(0x070b14);
+const scene=new THREE.Scene();
+scene.fog=new THREE.FogExp2(0x070b14,.012);
+const cam=new THREE.PerspectiveCamera(55,1,.1,500);
+
+scene.add(new THREE.AmbientLight(0x335077,.7));
+const sun=new THREE.PointLight(0x9fc0ff,2.2,120);scene.add(sun);
+const rim=new THREE.DirectionalLight(0xff7a3d,.6);rim.position.set(-20,10,-10);scene.add(rim);
+
+// noyau C++
+const core=new THREE.Mesh(new THREE.IcosahedronGeometry(2.6,1),new THREE.MeshStandardMaterial({color:0x2b5cff,emissive:0x1a3cff,emissiveIntensity:.8,flatShading:true,metalness:.3,roughness:.4}));
+scene.add(core);
+const coreWire=new THREE.Mesh(new THREE.IcosahedronGeometry(3.3,1),new THREE.MeshBasicMaterial({color:0x7fb0ff,wireframe:true,transparent:true,opacity:.25}));
+scene.add(coreWire);
+function label(txt,size,color){
+  const c=document.createElement("canvas"),x=c.getContext("2d");c.width=512;c.height=128;
+  x.font=`700 ${size}px "Chakra Petch",sans-serif`;x.fillStyle=color;x.textAlign="center";x.textBaseline="middle";
+  x.fillText(txt,256,64);
+  const t=new THREE.CanvasTexture(c);
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false}));
+  s.scale.set(6,1.5,1);return s;
+}
+const coreLbl=label("C++",88,"#ffffff");coreLbl.scale.set(5,1.25,1);coreLbl.position.y=4.6;scene.add(coreLbl);
+
+// étoiles
+const N=2500,pos=new Float32Array(N*3);
+for(let i=0;i<N;i++){const r=80+Math.random()*120,t=Math.random()*Math.PI*2,u=Math.acos(2*Math.random()-1);
+  pos[i*3]=r*Math.sin(u)*Math.cos(t);pos[i*3+1]=r*Math.cos(u);pos[i*3+2]=r*Math.sin(u)*Math.sin(t);}
+const sg=new THREE.BufferGeometry();sg.setAttribute("position",new THREE.BufferAttribute(pos,3));
+scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xbfd4ff,size:.5,sizeAttenuation:true})));
+
+// mots-clés C++ flottants
+["class","template","virtual","std::vector","const&","RAII","mutex","socket","override","nullptr","try/catch","std::map"].forEach((w,i)=>{
+  const s=label(w,46,"rgba(150,180,240,.55)");const a=i/12*Math.PI*2;
+  s.position.set(Math.cos(a)*34,(i%3-1)*8,Math.sin(a)*34);s.scale.set(5,1.25,1);scene.add(s);
+});
+
+// planètes
+const pickables=[];
+P.forEach((p,i)=>{
+  const ring=new THREE.Mesh(new THREE.RingGeometry(p.orbit-.03,p.orbit+.03,128),new THREE.MeshBasicMaterial({color:p.col,transparent:true,opacity:.22,side:THREE.DoubleSide}));
+  ring.rotation.x=Math.PI/2;scene.add(ring);
+  const g=new THREE.Group();
+  const m=new THREE.Mesh(new THREE.SphereGeometry(p.r,40,24),new THREE.MeshStandardMaterial({color:p.col,emissive:p.col,emissiveIntensity:.25,roughness:.55,metalness:.2}));
+  m.userData.i=i;g.add(m);pickables.push(m);
+  if(p.id==="zappy"||p.id==="arcade"){const rr=new THREE.Mesh(new THREE.TorusGeometry(p.r*1.6,.06,8,64),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.5}));rr.rotation.x=1.2;g.add(rr);}
+  const l=label(p.name,52,"#e8eefc");l.position.y=p.r+1.1;g.add(l);
+  p.g=g;p.mesh=m;p.a=i*0.9;scene.add(g);
+});
+
+// caméra orbitale maison
+let yaw=.6,pitch=.45,dist=40,tYaw=yaw,tPitch=pitch,tDist=dist,drag=false,lx=0,ly=0,moved=0;
+const target=new THREE.Vector3(),tTarget=new THREE.Vector3();
+canvas.addEventListener("pointerdown",e=>{drag=true;moved=0;lx=e.clientX;ly=e.clientY;});
+addEventListener("pointerup",e=>{if(drag&&moved<6)pick(e);drag=false;});
+addEventListener("pointermove",e=>{
+  if(drag){const dx=e.clientX-lx,dy=e.clientY-ly;moved+=Math.abs(dx)+Math.abs(dy);
+    tYaw-=dx*.005;tPitch=Math.max(.05,Math.min(1.3,tPitch+dy*.004));lx=e.clientX;ly=e.clientY;}
+  hover(e);
+});
+canvas.addEventListener("wheel",e=>{e.preventDefault();tDist=Math.max(8,Math.min(70,tDist+e.deltaY*.03));},{passive:false});
+
+const ray=new THREE.Raycaster(),mp=new THREE.Vector2();
+function hit(e){const r=canvas.getBoundingClientRect();mp.x=(e.clientX-r.left)/r.width*2-1;mp.y=-(e.clientY-r.top)/r.height*2+1;
+  ray.setFromCamera(mp,cam);const h=ray.intersectObjects(pickables);return h.length?h[0].object:null;}
+function pick(e){const o=hit(e);if(!o)return;focus=o.userData.i;openPanel(focus);tDist=12;}
+let hovered=null;
+function hover(e){if(e.target!==canvas)return;const o=hit(e);canvas.style.cursor=o?"pointer":"grab";
+  if(hovered&&hovered!==o)hovered.scale.setScalar(1);hovered=o;if(o)o.scale.setScalar(1.18);}
+road.addEventListener("click",e=>{const li=e.target.closest("li");if(!li)return;go(+li.dataset.i);});
+road.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){const li=e.target.closest("li");if(li){e.preventDefault();go(+li.dataset.i);}}});
+function go(i){focus=i;openPanel(i);tDist=12;$("#stage").scrollIntoView({behavior:reduce?"auto":"smooth"});}
+
+function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;renderer.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();
+  if(w<600&&tDist>50)tDist=55;}
+const ro=new ResizeObserver(resize);ro.observe(canvas);resize();
+
+const clock=new THREE.Clock();
+(function loop(){
+  const dt=Math.min(clock.getDelta(),.05),k=reduce?.15:1;
+  core.rotation.y+=dt*.3*k;core.rotation.x+=dt*.1*k;coreWire.rotation.y-=dt*.15*k;
+  P.forEach(p=>{p.a+=dt*p.speed*k*(focus===null?1:.25);p.g.position.set(Math.cos(p.a)*p.orbit,Math.sin(p.a*2)*.4,Math.sin(p.a)*p.orbit);p.mesh.rotation.y+=dt*.6;});
+  if(focus!==null){tTarget.copy(P[focus].g.position);}else{tTarget.set(0,0,0);if(!drag&&!reduce)tYaw+=dt*.04;}
+  yaw+=(tYaw-yaw)*.08;pitch+=(tPitch-pitch)*.08;dist+=(tDist-dist)*.06;target.lerp(tTarget,.08);
+  cam.position.set(target.x+dist*Math.cos(pitch)*Math.sin(yaw),target.y+dist*Math.sin(pitch),target.z+dist*Math.cos(pitch)*Math.cos(yaw));
+  cam.lookAt(target);
+  renderer.render(scene,cam);
+  requestAnimationFrame(loop);
+})();
+$("#pClose").addEventListener("click",()=>{tDist=40;});
+}
+}
+</script>
+</body>
+</html>
